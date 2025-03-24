@@ -1,6 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import React, { useRef, useState } from 'react';
-import { Button, Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Button, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import {router} from 'expo-router';
@@ -12,7 +13,12 @@ interface LabelAnnotation {
   topicality?: number;
   mid?: string;
 }
-
+interface PantryItem {
+  id: string;
+  timestamp: string;
+  imageUri?: string;
+  foodItems: FoodItem[];
+}
 interface LocalizedObjectAnnotation {
   name: string;
   score: number;
@@ -21,9 +27,11 @@ interface LocalizedObjectAnnotation {
 }
 
 interface FoodItem {
+  id?: string;
   name: string;
   confidence: number;
   source: string;
+  date?: string;
 }
 
 // Add these interface definitions to your existing type definitions
@@ -69,6 +77,7 @@ function isFoodRelated(description: string): boolean {
 const apiKey = 'AIzaSyCI549FIunkY2LgkvNJgdAJMvpmJUtpIj0';  // Replace with your API key
 const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
 export default function CameraScreen() {
+  const [selectedFoodItem, setSelectedFoodItem] = useState<FoodItem | null>(null);
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
@@ -188,103 +197,141 @@ export default function CameraScreen() {
     }
   }
 
+// ...existing code...
+async function takePicture() {
+  if (cameraRef.current) {
+    try {
+      const photo = await cameraRef.current.takePictureAsync();
+      // 3. Analyze the image before showing preview
+      console.log("3. Analyzing image...");
+      const analysisResults = await analyzeImage(photo.uri);
+      console.log("4. Analysis complete:", analysisResults);
+      
+      // 4. Store both the photo and analysis results
+      setAnalysisResults(analysisResults);
+      setPhoto(photo.uri);
 
-
-  
-  async function takePicture() {
-    if (cameraRef.current) {
-      try {
-        console.log("1. Taking picture...");
-        const photo = await cameraRef.current.takePictureAsync();
-        console.log("2. Picture taken:", photo.uri);
-  
-        // 3. Analyze the image before showing preview
-        console.log("3. Analyzing image...");
-        const analysisResults = await analyzeImage(photo.uri);
-        console.log("4. Analysis complete:", analysisResults);
-        
-        // 4. Store both the photo and analysis results
-        setAnalysisResults(analysisResults);
-        setPhoto(photo.uri);
-  
-        // Process the results to identify food
-        const response = analysisResults.responses[0];
-        const foodItems: FoodItem[] = [];
-        
-        // Process labels
-        if (response.labelAnnotations) {
-          const labels = response.labelAnnotations
-            .filter((label: LabelAnnotation) => isFoodRelated(label.description))
-            .map((label: LabelAnnotation) => ({
-              name: label.description,
-              confidence: label.score,
-              source: 'label'
-            }));
-          foodItems.push(...labels);
-        }
-        
-        
-        // Process objects
-        if (response.localizedObjectAnnotations) {
-          const objects = response.localizedObjectAnnotations
-            .filter((obj: LocalizedObjectAnnotation) => isFoodRelated(obj.name))
-            .map((obj: LocalizedObjectAnnotation) => ({
-              name: obj.name,
-              confidence: obj.score,
-              source: 'object'
-            }));
-          foodItems.push(...objects);
-        }
-        
-        // Process web detection
-        // Process web detection
-      if (response.webDetection) {
-  // Web entities
-  if (response.webDetection.webEntities) {
-    const webEntities = response.webDetection.webEntities
-      .filter((entity: WebEntity) => entity.description && isFoodRelated(entity.description))
-      .map((entity: WebEntity) => ({
-        name: entity.description,
-        confidence: entity.score,
-        source: 'web'
-      }));
-    foodItems.push(...webEntities);
-  }
-  
-  // Best guess labels
-  if (response.webDetection.bestGuessLabels) {
-    const bestGuesses = response.webDetection.bestGuessLabels
-      .filter((guess: BestGuessLabel) => isFoodRelated(guess.label))
-      .map((guess: BestGuessLabel) => ({
-        name: guess.label,
-        confidence: 0.9, // These don't come with scores
-        source: 'best_guess'
-      }));
-    foodItems.push(...bestGuesses);
-  }
-}
-        
-        // Remove duplicates and sort by confidence
-        const uniqueFoodItems = removeDuplicates(foodItems);
-        const sortedFoodItems = uniqueFoodItems.sort((a, b) => b.confidence - a.confidence);
-        
-        if (sortedFoodItems.length > 0) {
-          const foodNames = sortedFoodItems.map(item => item.name).join(', ');
-          console.log("Detected food items:", foodNames);
-          alert(`Detected food: ${foodNames}`);
-        } else {
-          console.log("No food items detected");
-          alert("No food items detected. Please try again with a clearer photo of food.");
-        }
-  
-      } catch (error) {
-        console.error('Failed to take/analyze photo', error);
-        alert('Failed to analyze image. Please try again.');
+      // Process the results to identify food
+      const response = analysisResults.responses[0];
+      const foodItems: FoodItem[] = [];
+      
+      // Process labels
+      if (response.labelAnnotations) {
+        const labels = response.labelAnnotations
+          .filter((label: LabelAnnotation) => isFoodRelated(label.description))
+          .map((label: LabelAnnotation) => ({
+            id: Math.random().toString(36).substring(2, 9),
+            name: label.description,
+            confidence: label.score,
+            source: 'label',
+            date: new Date().toISOString()
+          }));
+        foodItems.push(...labels);
       }
+      
+      // Process objects
+      if (response.localizedObjectAnnotations) {
+        const objects = response.localizedObjectAnnotations
+          .filter((obj: LocalizedObjectAnnotation) => isFoodRelated(obj.name))
+          .map((obj: LocalizedObjectAnnotation) => ({
+            id: Math.random().toString(36).substring(2, 9),
+            name: obj.name,
+            confidence: obj.score,
+            source: 'object',
+            date: new Date().toISOString()
+          }));
+        foodItems.push(...objects);
+      }
+      
+      // Process web detection
+      if (response.webDetection) {
+        // Web entities
+        if (response.webDetection.webEntities) {
+          const webEntities = response.webDetection.webEntities
+            .filter((entity: WebEntity) => entity.description && isFoodRelated(entity.description))
+            .map((entity: WebEntity) => ({
+              id: Math.random().toString(36).substring(2, 9),
+              name: entity.description,
+              confidence: entity.score,
+              source: 'web',
+              date: new Date().toISOString()
+            }));
+          foodItems.push(...webEntities);
+        }
+        
+        // Best guess labels
+        if (response.webDetection.bestGuessLabels) {
+          const bestGuesses = response.webDetection.bestGuessLabels
+            .filter((guess: BestGuessLabel) => isFoodRelated(guess.label))
+            .map((guess: BestGuessLabel) => ({
+              id: Math.random().toString(36).substring(2, 9),
+              name: guess.label,
+              confidence: 0.9, // These don't come with scores
+              source: 'best_guess',
+              date: new Date().toISOString()
+            }));
+          foodItems.push(...bestGuesses);
+        }
+      }
+      
+      // Remove duplicates and sort by confidence
+      const uniqueFoodItems = removeDuplicates(foodItems);
+      const sortedFoodItems = uniqueFoodItems.sort((a, b) => b.confidence - a.confidence);
+      
+      if (sortedFoodItems.length > 0) {
+        const foodNames = sortedFoodItems.map(item => item.name).join(', ');
+        console.log("Detected food items:", foodNames);
+        
+        // REMOVE THIS LINE to prevent automatic saving
+        // await saveFoodItemsToPantry(sortedFoodItems, photo.uri);
+        
+        // Just inform the user about detection, but don't save yet
+        alert(`Detected food: ${foodNames}\n\nPlease select an item to save to your pantry.`);
+      } else {
+        console.log("No food items detected");
+        alert("No food items detected. Please try again with a clearer photo of food.");
+      }
+
+    } catch (error) {
+      console.error('Failed to take/analyze photo', error);
+      alert('Failed to analyze image. Please try again.');
     }
   }
-  
-  // Helper function to check if a term is food-related
+}
+
+
+// Add this new function to save food items to pantry
+async function saveFoodItemsToPantry(foodItems: FoodItem[], imageUri: string) {
+  try {
+    // Create a new pantry entry
+    const newPantryItem: PantryItem = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      imageUri: imageUri,
+      foodItems: foodItems,
+    };
+    
+    // Get existing pantry items from AsyncStorage
+    let existingItems: PantryItem[] = [];
+    const storedItems = await AsyncStorage.getItem('pantryItems');
+    
+    if (storedItems) {
+      existingItems = JSON.parse(storedItems);
+    }
+    
+    // Add the new pantry item to the beginning of the array
+    const updatedItems = [newPantryItem, ...existingItems];
+    
+    // Save the updated array back to AsyncStorage
+    await AsyncStorage.setItem('pantryItems', JSON.stringify(updatedItems));
+    
+    console.log('Food items saved to pantry successfully!');
+  } catch (error) {
+    console.error('Error saving to pantry:', error);
+    throw error;
+  }
+}
+
   // Helper function to check if a term is food-related
 function isFoodRelated(term: string): boolean {
   const termLower = term.toLowerCase();
@@ -329,52 +376,141 @@ function removeDuplicates(items: FoodItem[]): FoodItem[] {
   
   return uniqueItems;
 }
+function extractFoodItems(response: any): FoodItem[] {
+  const foodItems: FoodItem[] = [];
+  
+  // Process labels
+  if (response.labelAnnotations) {
+    const labels = response.labelAnnotations
+      .filter((label: LabelAnnotation) => isFoodRelated(label.description))
+      .map((label: LabelAnnotation) => ({
+        name: label.description,
+        confidence: label.score, // We'll keep this for sorting but won't display it
+        source: 'label'
+      }));
+    foodItems.push(...labels);
+  }
+  
+  // Rest of the function remains the same
+  // ...existing code...
+  
+  // Remove duplicates and sort by confidence
+  const uniqueFoodItems = removeDuplicates(foodItems);
+  return uniqueFoodItems.sort((a, b) => b.confidence - a.confidence);
+}
 
-  async function savePicture()
-  {
-    if(photo)
-    {
-      try
-      {
-        await MediaLibrary.saveToLibraryAsync(photo);
-        alert('YES YES');
-        setPhoto(null);
-      }catch(error)
-      {
-        console.error('NO NO', error);
-      }
+
+// Update the savePicture function
+async function savePicture() {
+  if (photo && selectedFoodItem) {
+    try {
+      await MediaLibrary.saveToLibraryAsync(photo);
+      
+      // Save just the selected food item to pantry
+      await saveFoodItemsToPantry([{
+        id: Math.random().toString(36).substring(2, 9),
+        name: selectedFoodItem.name,
+        confidence: selectedFoodItem.confidence,
+        source: selectedFoodItem.source,
+        date: new Date().toISOString()
+      }], photo);
+
+      alert(`Saved ${selectedFoodItem.name} to your pantry!`);
+      
+      // After saving, navigate to the pantry screen
+      router.replace('/pantry');
+      
+      // Clear the states
+      setPhoto(null);
+      setSelectedFoodItem(null);
+      setAnalysisResults(null);
+    } catch (error) {
+      console.error('Failed to save photo', error);
+      alert('Failed to save photo to gallery.');
     }
+  } else if (!selectedFoodItem) {
+    alert('Please select a food item before saving.');
   }
+}
 
-  if (photo) {
-    return (
-      <View style={styles.container}>
-        <Image source={{ uri: photo }} style={styles.preview} />
-        <View style={styles.previewButtons}>
-          <TouchableOpacity style={styles.button} onPress={() => setPhoto(null)}>
-            <Text style={styles.text}>Retake</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={savePicture}>
-            <Text style={styles.text}>Save</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+if (photo) {
+  // Get food items from analysis results if available
+  const foodItems = analysisResults?.responses?.[0] ? 
+    extractFoodItems(analysisResults.responses[0]) : [];
+  
   return (
     <View style={styles.container}>
-    <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
-          <Text style={styles.text}>Flip Camera</Text>
+      <Image source={{ uri: photo }} style={styles.preview} />
+      
+      {foodItems.length > 0 ? (
+  <View style={styles.foodItemsContainer}>
+    <Text style={styles.sectionTitle}>Detected items:</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
+      {foodItems.map((item, index) => (
+        <TouchableOpacity
+          key={index}
+          style={[
+            styles.foodItemButton,
+            selectedFoodItem?.name === item.name && styles.selectedFoodItem
+          ]}
+          onPress={() => setSelectedFoodItem(item)}
+        >
+          <Text style={styles.foodItemText}>{item.name}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
-          <View style={styles.captureButtonInner} />
+      ))}
+    </ScrollView>
+    {selectedFoodItem && (
+      <Text style={styles.selectedText}>
+        Selected: {selectedFoodItem.name}
+      </Text>
+    )}
+  </View>
+) : (
+  <Text style={styles.noItemsText}>No food items detected</Text>
+)}
+      
+      <View style={styles.previewButtons}>
+        <TouchableOpacity style={styles.button} onPress={() => setPhoto(null)}>
+          <Text style={styles.text}>Retake</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.button, !selectedFoodItem && styles.disabledButton]} 
+          onPress={savePicture}
+          disabled={!selectedFoodItem}
+        >
+          <Text style={styles.text}>Save</Text>
         </TouchableOpacity>
       </View>
-    </CameraView>
-  </View>
-);
+    </View>
+  );
+}
+else{
+  // Add the camera view rendering when no photo is taken
+   return (
+      <View style={styles.container}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing={facing}
+          onMountError={(error) => console.error("Camera mount error:", error)}
+        >
+          <View style={styles.bottomButtonContainer}>
+            <TouchableOpacity style={styles.sideButton} onPress={() => router.back()}>
+              <Text style={styles.text}>Cancel</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
+              <View style={styles.captureButtonInner} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.sideButton} onPress={toggleCameraFacing}>
+              <Text style={styles.text}>Flip</Text>
+            </TouchableOpacity>
+          </View>
+        </CameraView>
+      </View>
+    );
+}
 }
 
 const styles = StyleSheet.create({
@@ -385,6 +521,9 @@ const styles = StyleSheet.create({
   message: {
     textAlign: 'center',
     paddingBottom: 10,
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   camera: {
     flex: 1,
@@ -401,7 +540,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   text: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
   },
@@ -422,6 +561,8 @@ const styles = StyleSheet.create({
     borderWidth: 5,
     borderColor: 'white',
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
     alignSelf: 'center',
     marginBottom: 25,
   },
@@ -431,5 +572,62 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     backgroundColor: 'white',
     margin: 5,
+  },
+
+  foodItemsContainer: {
+    padding: 15,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 10,
+  },
+  itemsScroll: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  foodItemButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: 10,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  selectedFoodItem: {
+    backgroundColor: '#4CAF50',
+  },
+  foodItemText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  selectedText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  noItemsText: {
+    color: 'white',
+    fontSize: 18,
+    textAlign: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 15,
+  },
+  bottomButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingVertical: 20,
+  },
+  sideButton: {
+    alignItems: 'center',
+    padding: 10,
   },
 });
