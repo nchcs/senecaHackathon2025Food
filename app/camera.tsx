@@ -2,16 +2,19 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import React, { useRef, useState } from 'react';
 import { Button, Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';
 import {router} from 'expo-router';
 
 
-
+const apiKey = 'AIzaSyCI549FIunkY2LgkvNJgdAJMvpmJUtpIj0';  // Replace with your API key
+const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
 export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
   const [photo, setPhoto] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
+  const [analysisResults, setAnalysisResults] = useState<any>(null);
 
   React.useEffect(() => {
     (async () => {
@@ -74,18 +77,75 @@ export default function CameraScreen() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   }
 
-  async function takePicture()
-  {
-    if(cameraRef.current)
-    {
-      try
-        {
-          const photo = await cameraRef.current.takePictureAsync();
-          setPhoto(photo.uri);
-        }catch(error)
-        {
-          console.error('Failed to take photo', error);
+
+  async function analyzeImage(imageUri: string) {
+    try {
+      // Convert image to base64
+      const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      
+      const requestBody = {
+        requests: [{
+          image: {
+            content: base64Image,
+          },
+          features: [{
+            type: "TEXT_DETECTION", // You can also use "LABEL_DETECTION", "FACE_DETECTION", etc.
+            maxResults: 5,
+          }],
+        }],
+      };
+  
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+  
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+  
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      throw error;
+    }
+  }
+
+
+  async function takePicture() {
+    if (cameraRef.current) {
+      try {
+        console.log("1. Taking picture...");
+        const photo = await cameraRef.current.takePictureAsync();
+        console.log("2. Picture taken:", photo.uri);
+  
+        // 3. Analyze the image before showing preview
+        console.log("3. Analyzing image...");
+        const analysisResults = await analyzeImage(photo.uri);
+        console.log("4. Analysis complete:", analysisResults);
+        
+        // 4. Store both the photo and analysis results
+        setAnalysisResults(analysisResults);
+        setPhoto(photo.uri);
+  
+        // Optional: Show detected text immediately
+        if (analysisResults.responses[0]?.fullTextAnnotation) {
+          const detectedText = analysisResults.responses[0].fullTextAnnotation.text;
+          console.log("Detected text:", detectedText);
+          // You could show this in an alert or set it in state
         }
+  
+      } catch (error) {
+        console.error('Failed to take/analyze photo', error);
+        alert('Failed to analyze image. Please try again.');
+      }
     }
   }
 
