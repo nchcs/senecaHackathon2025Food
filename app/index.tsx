@@ -5,11 +5,21 @@ export default function Home() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Pantry App</Text>
+      
       <TouchableOpacity 
         style={styles.button} 
         onPress={() => router.push('/camera')}
       >
         <Text style={styles.buttonText}>Open Camera</Text>
+      </TouchableOpacity>
+
+      {/* Add button to navigate to login/signup screen */}
+      <TouchableOpacity 
+        style={styles.button} 
+        onPress={() => router.push('../loginSignUp')} // Navigate to login/signup page
+
+      >
+        <Text style={styles.buttonText}>Login / Sign Up</Text>
       </TouchableOpacity>
     </View>
   );
@@ -32,6 +42,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
+    marginBottom: 10, // Adding some space between buttons
   },
   buttonText: {
     color: 'white',
