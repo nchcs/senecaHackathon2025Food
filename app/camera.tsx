@@ -1,10 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import React, { useRef, useState } from 'react';
-import { Button, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Button, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, TextInput, Modal } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import {router} from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
+
 
 // Add these interfaces at the top of your file or in a separate types file
 interface LabelAnnotation {
@@ -32,6 +35,10 @@ interface FoodItem {
   confidence: number;
   source: string;
   date?: string;
+  purchaseDate?: string;
+  quantity?: string;
+  expirationDate?: string; // Add this field
+  storageType?: 'refrigerated' | 'pantry' | 'frozen'; // Add this field
 }
 
 // Add these interface definitions to your existing type definitions
@@ -84,6 +91,12 @@ export default function CameraScreen() {
   const [photo, setPhoto] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [purchaseDate, setPurchaseDate] = useState('Today');
+  const [quantity, setQuantity] = useState('1');
+  const [storageType, setStorageType] = useState<'refrigerated' | 'pantry' | 'frozen'>('refrigerated');
+  const [expirationDate, setExpirationDate] = useState<string>('');
+  const [isCalculatingExpiration, setIsCalculatingExpiration] = useState(false);
 
   React.useEffect(() => {
     (async () => {
@@ -197,7 +210,6 @@ export default function CameraScreen() {
     }
   }
 
-// ...existing code...
 async function takePicture() {
   if (cameraRef.current) {
     try {
@@ -399,23 +411,38 @@ function extractFoodItems(response: any): FoodItem[] {
   return uniqueFoodItems.sort((a, b) => b.confidence - a.confidence);
 }
 
-
-// Update the savePicture function
 async function savePicture() {
   if (photo && selectedFoodItem) {
+    // Instead of using prompt, show the modal
+    setShowPurchaseModal(true);
+  } else if (!selectedFoodItem) {
+    Alert.alert('Selection Required', 'Please select a food item before saving.');
+  }
+}
+  // Add this new function to handle the actual saving after modal input
+  async function confirmAndSave() {
+    if (!photo || !selectedFoodItem) return;
+    
     try {
       await MediaLibrary.saveToLibraryAsync(photo);
       
-      // Save just the selected food item to pantry
+      // Save food item to pantry with the new fields
       await saveFoodItemsToPantry([{
         id: Math.random().toString(36).substring(2, 9),
         name: selectedFoodItem.name,
         confidence: selectedFoodItem.confidence,
         source: selectedFoodItem.source,
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        purchaseDate: purchaseDate,
+        quantity: quantity,
+        expirationDate: expirationDate,
+        storageType: storageType
       }], photo);
 
-      alert(`Saved ${selectedFoodItem.name} to your pantry!`);
+      Alert.alert('Success', `Saved ${selectedFoodItem.name} to your pantry!`);
+      
+      // Hide the modal
+      setShowPurchaseModal(false);
       
       // After saving, navigate to the pantry screen
       router.replace('/pantry');
@@ -424,66 +451,197 @@ async function savePicture() {
       setPhoto(null);
       setSelectedFoodItem(null);
       setAnalysisResults(null);
+      setExpirationDate('');
     } catch (error) {
       console.error('Failed to save photo', error);
-      alert('Failed to save photo to gallery.');
+      Alert.alert('Error', 'Failed to save photo to gallery.');
     }
-  } else if (!selectedFoodItem) {
-    alert('Please select a food item before saving.');
   }
-}
-
-if (photo) {
-  // Get food items from analysis results if available
-  const foodItems = analysisResults?.responses?.[0] ? 
-    extractFoodItems(analysisResults.responses[0]) : [];
-  
-  return (
-    <View style={styles.container}>
-      <Image source={{ uri: photo }} style={styles.preview} />
-      
-      {foodItems.length > 0 ? (
-  <View style={styles.foodItemsContainer}>
-    <Text style={styles.sectionTitle}>Detected items:</Text>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
-      {foodItems.map((item, index) => (
-        <TouchableOpacity
-          key={index}
-          style={[
-            styles.foodItemButton,
-            selectedFoodItem?.name === item.name && styles.selectedFoodItem
-          ]}
-          onPress={() => setSelectedFoodItem(item)}
+  if (photo) {
+    // Get food items from analysis results if available
+    const foodItems = analysisResults?.responses?.[0] ? 
+      extractFoodItems(analysisResults.responses[0]) : [];
+    
+    return (
+      <View style={styles.container}>
+        <Image source={{ uri: photo }} style={styles.preview} />
+        
+        {foodItems.length > 0 ? (
+          <View style={styles.foodItemsContainer}>
+            <Text style={styles.sectionTitle}>Detected items:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
+              {foodItems.map((item, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.foodItemButton,
+                    selectedFoodItem?.name === item.name && styles.selectedFoodItem
+                  ]}
+                  onPress={() => setSelectedFoodItem(item)}
+                >
+                  <Text style={styles.foodItemText}>{item.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            {selectedFoodItem && (
+              <Text style={styles.selectedText}>
+                Selected: {selectedFoodItem.name}
+              </Text>
+            )}
+          </View>
+        ) : (
+          <Text style={styles.noItemsText}>No food items detected</Text>
+        )}
+        
+        <View style={styles.previewButtons}>
+          <TouchableOpacity style={styles.button} onPress={() => setPhoto(null)}>
+            <Text style={styles.text}>Retake</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.button, !selectedFoodItem && styles.disabledButton]} 
+            onPress={savePicture}
+            disabled={!selectedFoodItem}
+          >
+            <Text style={styles.text}>Save</Text>
+          </TouchableOpacity>
+        </View>
+        
+      {/* Purchase Information Modal */}
+      <Modal
+          visible={showPurchaseModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowPurchaseModal(false)}
         >
-          <Text style={styles.foodItemText}>{item.name}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-    {selectedFoodItem && (
-      <Text style={styles.selectedText}>
-        Selected: {selectedFoodItem.name}
-      </Text>
-    )}
-  </View>
-) : (
-  <Text style={styles.noItemsText}>No food items detected</Text>
-)}
-      
-      <View style={styles.previewButtons}>
-        <TouchableOpacity style={styles.button} onPress={() => setPhoto(null)}>
-          <Text style={styles.text}>Retake</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.button, !selectedFoodItem && styles.disabledButton]} 
-          onPress={savePicture}
-          disabled={!selectedFoodItem}
-        >
-          <Text style={styles.text}>Save</Text>
-        </TouchableOpacity>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Food Details</Text>
+              
+              <Text style={styles.inputLabel}>When did you purchase this item?</Text>
+              <TextInput
+                style={styles.textInput}
+                value={purchaseDate}
+                onChangeText={setPurchaseDate}
+                placeholder="Today, Yesterday, March 20, etc."
+              />
+              
+              <Text style={styles.inputLabel}>Quantity</Text>
+              <TextInput
+                style={styles.textInput}
+                value={quantity}
+                onChangeText={setQuantity}
+                placeholder="1 box, 2 pounds, 3 cans, etc."
+              />
+              
+              <Text style={styles.inputLabel}>Storage Method</Text>
+              <View style={styles.storageSelector}>
+                <TouchableOpacity 
+                  style={[
+                    styles.storageOption, 
+                    storageType === 'refrigerated' && styles.selectedStorageOption
+                  ]}
+                  onPress={() => setStorageType('refrigerated')}
+                >
+                  <Ionicons 
+                    name="snow-outline" 
+                    size={24} 
+                    color={storageType === 'refrigerated' ? 'white' : '#666'} 
+                  />
+                  <Text style={[
+                    styles.storageOptionText, 
+                    storageType === 'refrigerated' && styles.selectedStorageOptionText
+                  ]}>
+                    Refrigerated
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.storageOption, 
+                    storageType === 'pantry' && styles.selectedStorageOption
+                  ]}
+                  onPress={() => setStorageType('pantry')}
+                >
+                  <Ionicons 
+                    name="cube-outline" 
+                    size={24} 
+                    color={storageType === 'pantry' ? 'white' : '#666'} 
+                  />
+                  <Text style={[
+                    styles.storageOptionText, 
+                    storageType === 'pantry' && styles.selectedStorageOptionText
+                  ]}>
+                    Pantry
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.storageOption, 
+                    storageType === 'frozen' && styles.selectedStorageOption
+                  ]}
+                  onPress={() => setStorageType('frozen')}
+                >
+                  <Ionicons 
+                    name="snow" 
+                    size={24} 
+                    color={storageType === 'frozen' ? 'white' : '#666'} 
+                  />
+                  <Text style={[
+                    styles.storageOptionText, 
+                    storageType === 'frozen' && styles.selectedStorageOptionText
+                  ]}>
+                    Frozen
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.predictButton}
+                onPress={async () => {
+                  if (selectedFoodItem) {
+                    const predicted = await predictExpirationWithMistral(
+                      selectedFoodItem.name,
+                      purchaseDate,
+                      storageType
+                    );
+                    setExpirationDate(predicted);
+                  }
+                }}
+                disabled={isCalculatingExpiration || !selectedFoodItem}
+              >
+                <Text style={styles.predictButtonText}>
+                  {isCalculatingExpiration ? 'Calculating...' : 'Calculate Expiration Date'}
+                </Text>
+              </TouchableOpacity>
+              
+              {expirationDate ? (
+                <View style={styles.expirationContainer}>
+                  <Text style={styles.expirationLabel}>Estimated Expiration:</Text>
+                  <Text style={styles.expirationDate}>{expirationDate}</Text>
+                </View>
+              ) : null}
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity 
+                  style={styles.modalButton} 
+                  onPress={() => setShowPurchaseModal(false)}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.confirmButton]} 
+                  onPress={confirmAndSave}
+                >
+                  <Text style={styles.modalButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
-    </View>
-  );
-}
+    );
+  }
 else{
   // Add the camera view rendering when no photo is taken
    return (
@@ -511,6 +669,94 @@ else{
       </View>
     );
 }
+
+ // Add Mistral AI function for expiration prediction
+ async function predictExpirationWithMistral(
+  foodName: string,
+  purchaseDate: string,
+  storageType: string
+): Promise<string> {
+  setIsCalculatingExpiration(true);
+  
+  try {
+    const API_KEY = "S2G8k3FjitWDQSC2LBEXZwjNvm6mZcgP"; 
+    
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "mistral-small", // You can also use mistral-medium or mistral-large for potentially better results
+        messages: [
+          {
+            role: "system",
+            content: "You are a food safety expert. Your task is to provide expiration dates for food items based on their purchase date and storage method. Respond with ONLY a date in MM/DD/YYYY format."
+          },
+          {
+            role: "user",
+            content: `Food item: ${foodName}
+            Purchase date: ${purchaseDate}
+            Storage method: ${storageType}
+            
+            When will this food expire? Please respond with ONLY the expiration date in MM/DD/YYYY format. If the purchase date is imprecise (like "Today"), assume today's date (${new Date().toLocaleDateString()}).`
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 50
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Extract date from response
+    const content = data.choices[0].message.content.trim();
+    const datePattern = /\b\d{1,2}\/\d{1,2}\/\d{4}\b/;
+    const match = content.match(datePattern);
+    
+    if (match) {
+      return match[0]; // Return the matched date
+    } else {
+      // If no date format found, use the response directly if it resembles a date
+      // Otherwise, use fallback calculation
+      const fallbackDate = new Date();
+      
+      // Determine fallback expiration based on storage type
+      let daysToAdd = 7; // Default for refrigerated
+      if (storageType === 'frozen') {
+        daysToAdd = 90;
+      } else if (storageType === 'pantry') {
+        daysToAdd = 14;
+      }
+      
+      fallbackDate.setDate(fallbackDate.getDate() + daysToAdd);
+      return fallbackDate.toLocaleDateString();
+    }
+  } catch (error) {
+    console.error('Error predicting expiration date:', error);
+    
+    // Fallback date calculation
+    const fallbackDate = new Date();
+    
+    let daysToAdd = 7; // Default for refrigerated
+    if (storageType === 'frozen') {
+      daysToAdd = 90;
+    } else if (storageType === 'pantry') {
+      daysToAdd = 14;
+    }
+    
+    fallbackDate.setDate(fallbackDate.getDate() + daysToAdd);
+    return fallbackDate.toLocaleDateString();
+  } finally {
+    setIsCalculatingExpiration(false);
+  }
+}
+
 }
 
 const styles = StyleSheet.create({
@@ -629,5 +875,120 @@ const styles = StyleSheet.create({
   sideButton: {
     alignItems: 'center',
     padding: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  inputLabel: {
+    fontSize: 16,
+    color: '#444',
+    marginBottom: 5,
+  },
+  textInput: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginHorizontal: 5,
+    backgroundColor: '#ccc',
+  },
+  confirmButton: {
+    backgroundColor: '#4CAF50',
+  },
+  modalButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  storageSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  storageOption: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginHorizontal: 4,
+  },
+  selectedStorageOption: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  storageOptionText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+  },
+  selectedStorageOptionText: {
+    color: 'white',
+  },
+  // Add these styles for the predict button
+  predictButton: {
+    backgroundColor: '#3498db',
+    padding: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  predictButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  
+  // Add these styles for displaying the expiration date
+  expirationContainer: {
+    backgroundColor: '#f5f5f5',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  expirationLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  expirationDate: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
   },
 });

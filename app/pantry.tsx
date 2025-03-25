@@ -7,13 +7,18 @@ import { Ionicons } from '@expo/vector-icons';
 
 // Define the interfaces for our data
 interface FoodItem {
-  id: string;
-  name: string;
-  confidence: number;
-  source: string;
-  date: string;
-  imageUri?: string;
-}
+    id: string;
+    name: string;
+    confidence: number;
+    source: string;
+    date: string;
+    purchaseDate?: string;
+    quantity?: string;
+    expirationDate?: string; // Add this field
+    storageType?: 'refrigerated' | 'pantry' | 'frozen'; // Add this field
+    imageUri?: string;
+  }
+  
 
 interface PantryItem {
   id: string;
@@ -76,37 +81,59 @@ export default function PantryScreen() {
   };
 
   // Function to render each pantry item
- // Function to render each pantry item
-const renderPantryItem = ({ item }: { item: PantryItem }) => {
+  const renderPantryItem = ({ item }: { item: PantryItem }) => {
     const date = new Date(item.timestamp);
     const formattedDate = date.toLocaleDateString();
     const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     return (
-      <View style={styles.pantryItemContainer}>
-        <View style={styles.pantryItemHeader}>
-          <Text style={styles.pantryItemDate}>{formattedDate} at {formattedTime}</Text>
-          <TouchableOpacity onPress={() => deletePantryItem(item.id)}>
-            <Ionicons name="trash-outline" size={24} color="red" />
-          </TouchableOpacity>
+        <View style={styles.pantryItemContainer}>
+          <View style={styles.pantryItemHeader}>
+            <Text style={styles.pantryItemDate}>{formattedDate} at {formattedTime}</Text>
+            <TouchableOpacity onPress={() => deletePantryItem(item.id)}>
+              <Ionicons name="trash-outline" size={24} color="red" />
+            </TouchableOpacity>
+          </View>
+          
+          {item.imageUri && (
+            <Image source={{ uri: item.imageUri }} style={styles.thumbnail} />
+          )}
+          
+          <View style={styles.foodItemsContainer}>
+            <Text style={styles.sectionTitle}>Food Items:</Text>
+            {item.foodItems.map((foodItem, index) => (
+              <View key={index} style={styles.foodItemRow}>
+                <View style={styles.foodItemNameContainer}>
+                  <Text style={styles.foodItemName}>{foodItem.name}</Text>
+                  {foodItem.quantity && (
+                    <Text style={styles.foodItemQuantity}>Quantity: {foodItem.quantity}</Text>
+                  )}
+                </View>
+                <View style={styles.foodItemDetailsContainer}>
+                  {foodItem.purchaseDate && (
+                    <Text style={styles.foodItemPurchaseDate}>Purchased: {foodItem.purchaseDate}</Text>
+                  )}
+                  {foodItem.expirationDate && (
+                    <Text style={[
+                      styles.foodItemExpiration,
+                      isExpiringSoon(foodItem.expirationDate) && styles.expiringWarning,
+                      isExpired(foodItem.expirationDate) && styles.expiredWarning
+                    ]}>
+                      Expires: {foodItem.expirationDate}
+                    </Text>
+                  )}
+                  {foodItem.storageType && (
+                    <Text style={styles.foodItemStorageType}>
+                      {foodItem.storageType.charAt(0).toUpperCase() + foodItem.storageType.slice(1)}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
-        
-        {item.imageUri && (
-          <Image source={{ uri: item.imageUri }} style={styles.thumbnail} />
-        )}
-        
-        <View style={styles.foodItemsContainer}>
-          <Text style={styles.sectionTitle}>Food Items:</Text>
-          {item.foodItems.map((foodItem, index) => (
-            <View key={index} style={styles.foodItemRow}>
-              <Text style={styles.foodItemName}>{foodItem.name}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  };
-
+      );
+    };
   return (
     <View style={styles.container}>
       <StatusBar style="auto" />
@@ -149,6 +176,24 @@ const renderPantryItem = ({ item }: { item: PantryItem }) => {
   );
 }
 
+function isExpiringSoon(expirationDate: string): boolean {
+    if (!expirationDate) return false;
+    
+    const expDate = new Date(expirationDate);
+    const today = new Date();
+    const diffTime = expDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 && diffDays <= 3; // Warning for items expiring within 3 days
+  }
+  
+  function isExpired(expirationDate: string): boolean {
+    if (!expirationDate) return false;
+    
+    const expDate = new Date(expirationDate);
+    const today = new Date();
+    return expDate < today;
+  }
+  
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -259,19 +304,67 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   foodItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-    paddingVertical: 4,
+    flexDirection: 'column',
+    marginBottom: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  foodItemName: {
+  foodItemText: {
     fontSize: 15,
     color: '#444',
   },
   foodItemConfidence: {
     fontSize: 14,
     color: '#888',
+  },
+  foodItemNameContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  foodItemName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#444',
+    flex: 1,
+  },
+  foodItemQuantity: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  foodItemDetailsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  foodItemPurchaseDate: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  foodItemExpiration: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  expiringWarning: {
+    color: '#FF9800',
+    fontWeight: 'bold',
+  },
+  expiredWarning: {
+    color: '#F44336',
+    fontWeight: 'bold',
+  },
+  foodItemStorageType: {
+    fontSize: 12,
+    color: '#888',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+    overflow: 'hidden',
   },
 });
