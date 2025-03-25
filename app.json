@@ -12,10 +12,10 @@
       "supportsTablet": true,
       "jsEngine": "hermes",
       "infoPlist": {
-    "NSCameraUsageDescription": "This app uses the camera to take photos of your pantry items",
-    "NSPhotoLibraryUsageDescription": "This app saves photos to your photo library",
-    "NSPhotoLibraryAddUsageDescription": "This app saves photos to your photo library"
-  }
+        "NSCameraUsageDescription": "This app uses the camera to take photos of your pantry items",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photos to add items to your pantry",
+        "NSPhotoLibraryAddUsageDescription": "This app saves photos to your photo library"
+      }
     },
     "android": {
       "adaptiveIcon": {

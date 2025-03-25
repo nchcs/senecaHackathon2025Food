@@ -1,10 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import React, { useRef, useState } from 'react';
-import { Button, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, TextInput, Modal } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { 
+  Button, 
+  Image, 
+  Linking, 
+  ScrollView, 
+  StyleSheet, 
+  Text, 
+  TouchableOpacity, 
+  View, 
+  Alert, 
+  TextInput, 
+  Modal,
+  ActivityIndicator 
+} from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
-import {router} from 'expo-router';
+import {router, useLocalSearchParams} from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 
@@ -97,6 +110,30 @@ export default function CameraScreen() {
   const [storageType, setStorageType] = useState<'refrigerated' | 'pantry' | 'frozen'>('refrigerated');
   const [expirationDate, setExpirationDate] = useState<string>('');
   const [isCalculatingExpiration, setIsCalculatingExpiration] = useState(false);
+  const params = useLocalSearchParams();
+  const initialImageUri = params.imageUri as string;
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+
+
+  useEffect(() => {
+    if (initialImageUri) {
+      setPhoto(initialImageUri);
+      // Show loading state
+      setAnalysisLoading(true);
+      
+      // Analyze the image if it comes from the gallery
+      analyzeImage(initialImageUri)
+        .then(results => {
+          setAnalysisResults(results);
+          setAnalysisLoading(false);
+        })
+        .catch(error => {
+          console.error('Failed to analyze gallery image', error);
+          alert('Failed to analyze image. Please try again.');
+          setAnalysisLoading(false);
+        });
+    }
+  }, [initialImageUri]);
 
   React.useEffect(() => {
     (async () => {
@@ -466,45 +503,50 @@ async function savePicture() {
       <View style={styles.container}>
         <Image source={{ uri: photo }} style={styles.preview} />
         
-        {foodItems.length > 0 ? (
-          <View style={styles.foodItemsContainer}>
-            <Text style={styles.sectionTitle}>Detected items:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
-              {foodItems.map((item, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.foodItemButton,
-                    selectedFoodItem?.name === item.name && styles.selectedFoodItem
-                  ]}
-                  onPress={() => setSelectedFoodItem(item)}
-                >
-                  <Text style={styles.foodItemText}>{item.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            {selectedFoodItem && (
-              <Text style={styles.selectedText}>
-                Selected: {selectedFoodItem.name}
-              </Text>
-            )}
-          </View>
-        ) : (
-          <Text style={styles.noItemsText}>No food items detected</Text>
-        )}
-        
-        <View style={styles.previewButtons}>
-          <TouchableOpacity style={styles.button} onPress={() => setPhoto(null)}>
-            <Text style={styles.text}>Retake</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.button, !selectedFoodItem && styles.disabledButton]} 
-            onPress={savePicture}
-            disabled={!selectedFoodItem}
-          >
-            <Text style={styles.text}>Save</Text>
-          </TouchableOpacity>
+        {analysisLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+          <Text style={styles.loadingText}>Analyzing image...</Text>
         </View>
+      ) : foodItems.length > 0 ? (
+        <View style={styles.foodItemsContainer}>
+          <Text style={styles.sectionTitle}>Detected items:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemsScroll}>
+            {foodItems.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.foodItemButton,
+                  selectedFoodItem?.name === item.name && styles.selectedFoodItem
+                ]}
+                onPress={() => setSelectedFoodItem(item)}
+              >
+                <Text style={styles.foodItemText}>{item.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {selectedFoodItem && (
+            <Text style={styles.selectedText}>
+              Selected: {selectedFoodItem.name}
+            </Text>
+          )}
+        </View>
+      ) : (
+        <Text style={styles.noItemsText}>No food items detected</Text>
+      )}
+      
+      <View style={styles.previewButtons}>
+        <TouchableOpacity style={styles.button} onPress={() => setPhoto(null)}>
+          <Text style={styles.text}>Retake</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.button, !selectedFoodItem && styles.disabledButton]} 
+          onPress={savePicture}
+          disabled={!selectedFoodItem}
+        >
+          <Text style={styles.text}>Save</Text>
+        </TouchableOpacity>
+      </View>
         
       {/* Purchase Information Modal */}
       <Modal
@@ -991,4 +1033,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  loadingContainer: {
+    padding: 15,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: 'white',
+    marginTop: 10,
+    fontSize: 16,
+  }
 });

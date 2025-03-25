@@ -1,3 +1,4 @@
+import * as ImagePicker from 'expo-image-picker';
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,6 +37,37 @@ export default function PantryScreen() {
     loadPantryItems();
   }, []);
 
+  const pickImageFromGallery = async () => {
+    // Request permissions
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow access to your photo library to import food images.');
+      return;
+    }
+    
+    try {
+      // Launch the image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+      
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        // Navigate to camera screen with the selected image URI
+        router.push({
+          pathname: '/camera',
+          params: { imageUri: result.assets[0].uri }
+        });
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select image from gallery.');
+    }
+  };
+  
   // Function to load pantry items from AsyncStorage
   const loadPantryItems = async () => {
     try {
@@ -81,89 +113,97 @@ export default function PantryScreen() {
   };
 
   // Function to render each pantry item
-  const renderPantryItem = ({ item }: { item: PantryItem }) => {
-    const date = new Date(item.timestamp);
-    const formattedDate = date.toLocaleDateString();
-    const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    return (
-        <View style={styles.pantryItemContainer}>
-          <View style={styles.pantryItemHeader}>
-            <Text style={styles.pantryItemDate}>{formattedDate} at {formattedTime}</Text>
-            <TouchableOpacity onPress={() => deletePantryItem(item.id)}>
-              <Ionicons name="trash-outline" size={24} color="red" />
-            </TouchableOpacity>
-          </View>
-          
-          {item.imageUri && (
-            <Image source={{ uri: item.imageUri }} style={styles.thumbnail} />
-          )}
-          
-          <View style={styles.foodItemsContainer}>
-            <Text style={styles.sectionTitle}>Food Items:</Text>
-            {item.foodItems.map((foodItem, index) => (
-              <View key={index} style={styles.foodItemRow}>
-                <View style={styles.foodItemNameContainer}>
-                  <Text style={styles.foodItemName}>{foodItem.name}</Text>
-                  {foodItem.quantity && (
-                    <Text style={styles.foodItemQuantity}>Quantity: {foodItem.quantity}</Text>
-                  )}
-                </View>
-                <View style={styles.foodItemDetailsContainer}>
-                  {foodItem.purchaseDate && (
-                    <Text style={styles.foodItemPurchaseDate}>Purchased: {foodItem.purchaseDate}</Text>
-                  )}
-                  {foodItem.expirationDate && (
-                    <Text style={[
-                      styles.foodItemExpiration,
-                      isExpiringSoon(foodItem.expirationDate) && styles.expiringWarning,
-                      isExpired(foodItem.expirationDate) && styles.expiredWarning
-                    ]}>
-                      Expires: {foodItem.expirationDate}
-                    </Text>
-                  )}
-                  {foodItem.storageType && (
-                    <Text style={styles.foodItemStorageType}>
-                      {foodItem.storageType.charAt(0).toUpperCase() + foodItem.storageType.slice(1)}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      );
-    };
+// Modify the renderPantryItem function to remove the header section
+const renderPantryItem = ({ item }: { item: PantryItem }) => {
+  const date = new Date(item.timestamp);
+  const formattedDate = date.toLocaleDateString();
+  const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
   return (
-    <View style={styles.container}>
-      <StatusBar style="auto" />
-      
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Pantry</Text>
-        <TouchableOpacity style={styles.cameraButton} onPress={() => router.push('/camera')}>
-          <Ionicons name="camera" size={24} color="white" />
-          <Text style={styles.cameraButtonText}>Scan Food</Text>
+    <View style={styles.pantryItemContainer}>
+      <View style={styles.pantryItemHeader}>
+        <Text style={styles.pantryItemDate}>{formattedDate} at {formattedTime}</Text>
+        <TouchableOpacity onPress={() => deletePantryItem(item.id)}>
+          <Ionicons name="trash-outline" size={24} color="red" />
         </TouchableOpacity>
       </View>
-      <View style={styles.header}>
-  <Text style={styles.headerTitle}>My Pantry</Text>
-  <View style={styles.headerButtons}>
-    <TouchableOpacity 
-      style={styles.headerButton} 
-      onPress={() => router.push('/recipeBook')}
-    >
-      <Ionicons name="restaurant" size={24} color="white" />
-      <Text style={styles.headerButtonText}>Recipes</Text>
-    </TouchableOpacity>
-    <TouchableOpacity 
-      style={styles.headerButton} 
-      onPress={() => router.push('/camera')}
-    >
-      <Ionicons name="camera" size={24} color="white" />
-      <Text style={styles.headerButtonText}>Scan</Text>
-    </TouchableOpacity>
-  </View>
-</View>
+      
+      {/* Remove the header section that was here */}
+      
+      {item.imageUri && (
+        <Image source={{ uri: item.imageUri }} style={styles.thumbnail} />
+      )}
+      
+      <View style={styles.foodItemsContainer}>
+        <Text style={styles.sectionTitle}>Food Items:</Text>
+        {item.foodItems.map((foodItem, index) => (
+          <View key={index} style={styles.foodItemRow}>
+            {/* The rest of the food item display remains the same */}
+            <View style={styles.foodItemNameContainer}>
+              <Text style={styles.foodItemName}>{foodItem.name}</Text>
+              {foodItem.quantity && (
+                <Text style={styles.foodItemQuantity}>Quantity: {foodItem.quantity}</Text>
+              )}
+            </View>
+            <View style={styles.foodItemDetailsContainer}>
+              {foodItem.purchaseDate && (
+                <Text style={styles.foodItemPurchaseDate}>Purchased: {foodItem.purchaseDate}</Text>
+              )}
+              {foodItem.expirationDate && (
+                <Text style={[
+                  styles.foodItemExpiration,
+                  isExpiringSoon(foodItem.expirationDate) && styles.expiringWarning,
+                  isExpired(foodItem.expirationDate) && styles.expiredWarning
+                ]}>
+                  Expires: {foodItem.expirationDate}
+                </Text>
+              )}
+              {foodItem.storageType && (
+                <Text style={styles.foodItemStorageType}>
+                  {foodItem.storageType.charAt(0).toUpperCase() + foodItem.storageType.slice(1)}
+                </Text>
+              )}
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+  return (
+    <View style={styles.container}>
+    <StatusBar style="auto" />
+    
+    {/* SINGLE HEADER - replace both existing headers with this */}
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>My Pantry</Text>
+      <View style={styles.headerButtons}>
+        <TouchableOpacity 
+          style={styles.headerButton} 
+          onPress={() => router.push('/recipeBook')}
+        >
+          <Ionicons name="restaurant" size={24} color="white" />
+          <Text style={styles.headerButtonText}>Recipes</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.headerButton} 
+          onPress={pickImageFromGallery}
+        >
+          <Ionicons name="images" size={24} color="white" />
+          <Text style={styles.headerButtonText}>Gallery</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.headerButton} 
+          onPress={() => router.push('/camera')}
+        >
+          <Ionicons name="camera" size={24} color="white" />
+          <Text style={styles.headerButtonText}>Scan</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+      
+
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <Text>Loading pantry items...</Text>
