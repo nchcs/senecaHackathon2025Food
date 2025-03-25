@@ -145,7 +145,25 @@ export default function PantryScreen() {
           <Text style={styles.cameraButtonText}>Scan Food</Text>
         </TouchableOpacity>
       </View>
-      
+      <View style={styles.header}>
+  <Text style={styles.headerTitle}>My Pantry</Text>
+  <View style={styles.headerButtons}>
+    <TouchableOpacity 
+      style={styles.headerButton} 
+      onPress={() => router.push('/recipeBook')}
+    >
+      <Ionicons name="restaurant" size={24} color="white" />
+      <Text style={styles.headerButtonText}>Recipes</Text>
+    </TouchableOpacity>
+    <TouchableOpacity 
+      style={styles.headerButton} 
+      onPress={() => router.push('/camera')}
+    >
+      <Ionicons name="camera" size={24} color="white" />
+      <Text style={styles.headerButtonText}>Scan</Text>
+    </TouchableOpacity>
+  </View>
+</View>
       {loading ? (
         <View style={styles.loadingContainer}>
           <Text>Loading pantry items...</Text>
@@ -212,6 +230,22 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+  },
+  headerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginLeft: 10,
+  },
+  headerButtonText: {
+    color: 'white',
+    marginLeft: 6,
   },
   cameraButton: {
     flexDirection: 'row',

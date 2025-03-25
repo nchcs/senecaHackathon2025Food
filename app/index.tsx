@@ -24,6 +24,15 @@ export default function Home() {
           <Ionicons name="basket-outline" size={24} color="white" style={styles.buttonIcon} />
           <Text style={styles.buttonText}>View Pantry</Text>
         </TouchableOpacity>
+        
+        {/* Add new Recipe Ideas button */}
+        <TouchableOpacity 
+          style={[styles.button, styles.recipeButton]} 
+          onPress={() => router.push('/recipeBook')}
+        >
+          <Ionicons name="restaurant-outline" size={24} color="white" style={styles.buttonIcon} />
+          <Text style={styles.buttonText}>Recipe Ideas</Text>
+        </TouchableOpacity>
       </View>
       
       <Text style={styles.instructionText}>
@@ -64,10 +73,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,  // Add margin between buttons
+    marginBottom: 16,
   },
   pantryButton: {
     backgroundColor: '#34C759', // Green color for the pantry button
+  },
+  recipeButton: {
+    backgroundColor: '#FF9500', // Orange color for the recipe button
   },
   buttonIcon: {
     marginRight: 8,
