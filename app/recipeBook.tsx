@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
+import config from './config';
 
 // Define the interfaces (matching your existing pantry.tsx structure)
 interface FoodItem {
@@ -85,7 +86,7 @@ export default function RecipeBook() {
         return;
       }
       
-      const API_KEY = "S2G8k3FjitWDQSC2LBEXZwjNvm6mZcgP"; // Same key as in camera.tsx
+      const API_KEY = config.mistralApiKey;
       
       const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',

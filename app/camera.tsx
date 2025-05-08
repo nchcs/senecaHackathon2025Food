@@ -19,7 +19,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import {router, useLocalSearchParams} from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-
+import config from './config';
 
 
 // Add these interfaces at the top of your file or in a separate types file
@@ -94,7 +94,7 @@ function isFoodRelated(description: string): boolean {
   );
 }
 
-const apiKey = 'AIzaSyCI549FIunkY2LgkvNJgdAJMvpmJUtpIj0';  // Replace with your API key
+const apiKey = config.googleVisionApiKey; 
 const apiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`;
 export default function CameraScreen() {
   const [selectedFoodItem, setSelectedFoodItem] = useState<FoodItem | null>(null);
@@ -721,7 +721,7 @@ else{
   setIsCalculatingExpiration(true);
   
   try {
-    const API_KEY = "S2G8k3FjitWDQSC2LBEXZwjNvm6mZcgP"; 
+    const API_KEY = config.mistralApiKey;
     
     const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
